@@ -23,7 +23,8 @@ pipeline {
                 --stack-name todo-list-aws-staging \
                 --region us-east-1 \
                 --capabilities CAPABILITY_IAM \
-                --parameter-overrides Stage=staging
+                --parameter-overrides Stage=staging \
+                --resolve-s3
                 '''
             }
         }
