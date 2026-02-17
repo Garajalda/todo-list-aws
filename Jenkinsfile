@@ -43,14 +43,22 @@ pipeline {
         }
         stage('Promote') {
             steps {
-                sh '''
-                git config user.email "jenkins@local"
-                git config user.name "Jenkins"
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-token',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )]) {
+                    sh '''
+                    git config user.email "jenkins@local"
+                    git config user.name "Jenkins"
 
-                git checkout main
-                git merge develop
-                git push origin main
-                '''
+                    git checkout main
+                    git merge develop
+
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
+                    git push origin main
+                    '''
+                }
             }
         }
     }
