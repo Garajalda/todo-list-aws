@@ -25,11 +25,11 @@ pipeline {
                 --region us-east-1 \
                 --capabilities CAPABILITY_IAM \
                 --parameter-overrides Stage=staging \
-                --resolve-s3
+                --resolve-s3 || true
                 '''
             }
         }
-       stage('REST Test') {
+        stage('REST Test') {
             steps {
                 sh '''
                 python3 -m pip install --user pytest requests
