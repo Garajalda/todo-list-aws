@@ -20,10 +20,10 @@ pipeline {
                 sh 'sam build'
                 sh '''
                 sam deploy \
-                  --stack-name $STACK_NAME \
-                  --region $AWS_DEFAULT_REGION \
-                  --capabilities CAPABILITY_IAM \
-                  --parameter-overrides Stage=staging
+                --stack-name todo-list-aws-staging \
+                --region us-east-1 \
+                --capabilities CAPABILITY_IAM \
+                --parameter-overrides Stage=staging
                 '''
             }
         }
