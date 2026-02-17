@@ -36,7 +36,7 @@ pipeline {
 
                 export BASE_URL=https://aikbo4gt5h.execute-api.us-east-1.amazonaws.com/Prod
 
-                python3 -m pytest -m api -v
+                python3 -m pytest test/integration/todoApiTest.py -v
                 '''
             }
         }
