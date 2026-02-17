@@ -17,6 +17,7 @@ pipeline {
         }
         stage('Deploy') {
             steps {
+                sh 'rm -f samconfig.toml'
                 sh 'sam build'
                 sh '''
                 sam deploy \
@@ -24,8 +25,7 @@ pipeline {
                 --region us-east-1 \
                 --capabilities CAPABILITY_IAM \
                 --parameter-overrides Stage=staging \
-                --resolve-s3 \
-                --no-config-file
+                --resolve-s3
                 '''
             }
         }
