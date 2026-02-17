@@ -9,9 +9,9 @@ pipeline {
         }
         stage('Static Test') {
             steps {
-                sh 'pip install flake8 bandit'
-                sh 'flake8 src/ --output-file flake8-report.txt || true'
-                sh 'bandit -r src/ -f txt -o bandit-report.txt || true'
+                sh 'python3 -m pip install --user flake8 bandit'
+                sh 'python3 -m flake8 src/ --output-file=flake8-report.txt || true'
+                sh 'python3 -m bandit -r src/ -f txt -o bandit-report.txt || true'
                 archiveArtifacts artifacts: '*.txt'
             }
         }
