@@ -4,6 +4,7 @@ pipeline {
         stage('Get Code') {
             steps {
                 git branch: 'develop',
+                    credentialsId: 'github-token',
                     url: 'https://github.com/Garajalda/todo-list-aws.git'
             }
         }
@@ -37,6 +38,18 @@ pipeline {
                 export BASE_URL=https://aikbo4gt5h.execute-api.us-east-1.amazonaws.com/Prod
 
                 python3 -m pytest test/integration/todoApiTest.py -v
+                '''
+            }
+        }
+        stage('Promote') {
+            steps {
+                sh '''
+                git config user.email "jenkins@local"
+                git config user.name "Jenkins"
+
+                git checkout main
+                git merge develop
+                git push origin main
                 '''
             }
         }
