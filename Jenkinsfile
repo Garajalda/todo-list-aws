@@ -24,7 +24,8 @@ pipeline {
                 --region us-east-1 \
                 --capabilities CAPABILITY_IAM \
                 --parameter-overrides Stage=staging \
-                --resolve-s3
+                --resolve-s3 \
+                --no-config-file
                 '''
             }
         }
