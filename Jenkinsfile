@@ -35,7 +35,7 @@ pipeline {
                         --parameter-overrides Stage=staging \
                         --resolve-s3
                         '''
-                    } else if (env.BRANCH_NAME == 'master') {
+                    } else if (env.BRANCH_NAME == 'main') {
                         sh '''
                         sam build
                         sam deploy \
@@ -59,7 +59,7 @@ pipeline {
                         export BASE_URL=https://TU_API_STAGING
                         python3 -m pytest test/integration/todoApiTest.py -v
                         '''
-                    } else if (env.BRANCH_NAME == 'master') {
+                    } else if (env.BRANCH_NAME == 'main') {
                         sh '''
                         python3 -m pip install --user pytest requests
                         export BASE_URL=https://TU_API_PROD
@@ -84,11 +84,11 @@ pipeline {
                     git config user.email "jenkins@local"
                     git config user.name "Jenkins"
 
-                    git checkout master
+                    git checkout main
                     git merge develop
 
                     git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
-                    git push origin master
+                    git push origin main
                     '''
                 }
             }
