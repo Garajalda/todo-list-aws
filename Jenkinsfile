@@ -15,8 +15,9 @@ pipeline {
 
         stage('Static Test (CI only)') {
             when {
-                branch 'develop'
+                expression { env.GIT_BRANCH.contains('develop') }
             }
+
             steps {
                 sh '''
                 python3 -m pip install --user flake8 bandit
@@ -30,10 +31,13 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    if (env.BRANCH_NAME == 'develop') {
+
+                    sh 'echo GIT_BRANCH=$GIT_BRANCH'
+
+                    if (env.GIT_BRANCH.contains('develop')) {
                         env.STACK_NAME = 'todo-list-aws-staging'
                         env.STAGE_PARAM = 'staging'
-                    } else if (env.BRANCH_NAME == 'main') {
+                    } else if (env.GIT_BRANCH.contains('main')) {
                         env.STACK_NAME = 'todo-list-aws-production'
                         env.STAGE_PARAM = 'production'
                     }
@@ -42,12 +46,12 @@ pipeline {
                     rm -f samconfig.toml
                     sam build
                     sam deploy \
-                      --stack-name ${env.STACK_NAME} \
-                      --region ${AWS_REGION} \
-                      --capabilities CAPABILITY_IAM \
-                      --parameter-overrides Stage=${env.STAGE_PARAM} \
-                      --resolve-s3 \
-                      --no-fail-on-empty-changeset
+                    --stack-name ${env.STACK_NAME} \
+                    --region ${AWS_REGION} \
+                    --capabilities CAPABILITY_IAM \
+                    --parameter-overrides Stage=${env.STAGE_PARAM} \
+                    --resolve-s3 \
+                    --no-fail-on-empty-changeset
                     """
                 }
             }
@@ -96,9 +100,10 @@ pipeline {
         }
 
         stage('Promote to Main') {
-            when {
-                branch 'develop'
+           when {
+                expression { env.GIT_BRANCH.contains('develop') }
             }
+
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'github-token',
