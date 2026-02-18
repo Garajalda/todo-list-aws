@@ -117,7 +117,7 @@ pipeline {
 
                     git checkout main
                     git pull origin main
-                    git merge develop
+                    git merge origin/develop
 
                     git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
                     git push origin main
