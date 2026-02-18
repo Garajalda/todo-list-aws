@@ -1,58 +1,117 @@
 pipeline {
     agent any
+
+    environment {
+        AWS_REGION = 'us-east-1'
+    }
+
     stages {
+
         stage('Get Code') {
             steps {
-                git branch: 'develop',
-                    credentialsId: 'github-token',
-                    url: 'https://github.com/Garajalda/todo-list-aws.git'
+                checkout scm
             }
         }
-        stage('Static Test') {
+
+        stage('Static Test (CI only)') {
+            when {
+                branch 'develop'
+            }
             steps {
-                sh 'python3 -m pip install --user flake8 bandit'
-                sh 'python3 -m flake8 src/ --output-file=flake8-report.txt || true'
-                sh 'python3 -m bandit -r src/ -f txt -o bandit-report.txt || true'
+                sh '''
+                python3 -m pip install --user flake8 bandit
+                python3 -m flake8 src/ --output-file=flake8-report.txt || true
+                python3 -m bandit -r src/ -f txt -o bandit-report.txt || true
+                '''
                 archiveArtifacts artifacts: '*.txt'
             }
         }
+
         stage('Deploy') {
             steps {
-                sh 'rm -f samconfig.toml'
-                sh 'sam build'
-                sh '''
-                sam deploy \
-                --stack-name todo-list-aws-staging \
-                --region us-east-1 \
-                --capabilities CAPABILITY_IAM \
-                --parameter-overrides Stage=staging \
-                --resolve-s3 || true
-                '''
+                script {
+                    if (env.BRANCH_NAME == 'develop') {
+                        env.STACK_NAME = 'todo-list-aws-staging'
+                        env.STAGE_PARAM = 'staging'
+                    } else if (env.BRANCH_NAME == 'main') {
+                        env.STACK_NAME = 'todo-list-aws-production'
+                        env.STAGE_PARAM = 'production'
+                    }
+
+                    sh """
+                    rm -f samconfig.toml
+                    sam build
+                    sam deploy \
+                      --stack-name ${env.STACK_NAME} \
+                      --region ${AWS_REGION} \
+                      --capabilities CAPABILITY_IAM \
+                      --parameter-overrides Stage=${env.STAGE_PARAM} \
+                      --resolve-s3 \
+                      --no-fail-on-empty-changeset
+                    """
+                }
             }
         }
+
+        stage('Get API URL') {
+            steps {
+                script {
+                    env.BASE_URL = sh(
+                        script: """
+                        aws cloudformation describe-stacks \
+                          --stack-name ${env.STACK_NAME} \
+                          --region ${AWS_REGION} \
+                          --query "Stacks[0].Outputs[?OutputKey=='BaseUrlApi'].OutputValue" \
+                          --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+                }
+
+                sh 'echo BASE_URL=${BASE_URL}'
+            }
+        }
+
         stage('REST Test') {
             steps {
-                sh '''
-                python3 -m pip install --user pytest requests
+                script {
+                    sh 'python3 -m pip install --user pytest requests'
 
-                export BASE_URL=https://aikbo4gt5h.execute-api.us-east-1.amazonaws.com/Prod
+                    if (env.BRANCH_NAME == 'develop') {
 
-                python3 -m pytest test/integration/todoApiTest.py -v
-                '''
+                        sh '''
+                        export BASE_URL=${BASE_URL}
+                        python3 -m pytest test/integration/todoApiTest.py -v
+                        '''
+
+                    } else if (env.BRANCH_NAME == 'main') {
+
+                        sh '''
+                        export BASE_URL=${BASE_URL}
+                        python3 -m pytest test/integration/testReadOnly.py -v
+                        '''
+                    }
+                }
             }
         }
-        stage('Promote') {
+
+        stage('Promote to Main') {
+            when {
+                branch 'develop'
+            }
             steps {
                 withCredentials([usernamePassword(
                     credentialsId: 'github-token',
                     usernameVariable: 'GIT_USERNAME',
                     passwordVariable: 'GIT_PASSWORD'
                 )]) {
+
                     sh '''
                     git config user.email "jenkins@local"
                     git config user.name "Jenkins"
 
                     git checkout main
+                    git pull origin main
                     git merge develop
 
                     git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
@@ -60,6 +119,12 @@ pipeline {
                     '''
                 }
             }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
         }
     }
 }
