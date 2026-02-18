@@ -1,16 +1,6 @@
 pipeline {
     agent any
-
     stages {
-
-        stage('Get Code') {
-            steps {
-                git branch: env.BRANCH_NAME,
-                    credentialsId: 'github-token',
-                    url: 'https://github.com/Garajalda/todo-list-aws.git'
-            }
-        }
-
         stage('Static Test') {
             when {
                 branch 'develop'
@@ -21,7 +11,6 @@ pipeline {
                 sh 'python3 -m bandit -r src/ -f txt -o bandit-report.txt || true'
             }
         }
-
         stage('Deploy') {
             steps {
                 script {
