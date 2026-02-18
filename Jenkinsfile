@@ -17,7 +17,6 @@ pipeline {
             when {
                 expression { env.GIT_BRANCH.contains('develop') }
             }
-
             steps {
                 sh '''
                 python3 -m pip install --user flake8 bandit
@@ -46,12 +45,12 @@ pipeline {
                     rm -f samconfig.toml
                     sam build
                     sam deploy \
-                    --stack-name ${env.STACK_NAME} \
-                    --region ${AWS_REGION} \
-                    --capabilities CAPABILITY_IAM \
-                    --parameter-overrides Stage=${env.STAGE_PARAM} \
-                    --resolve-s3 \
-                    --no-fail-on-empty-changeset
+                      --stack-name ${env.STACK_NAME} \
+                      --region ${AWS_REGION} \
+                      --capabilities CAPABILITY_IAM \
+                      --parameter-overrides Stage=${env.STAGE_PARAM} \
+                      --resolve-s3 \
+                      --no-fail-on-empty-changeset
                     """
                 }
             }
@@ -71,7 +70,6 @@ pipeline {
                         returnStdout: true
                     ).trim()
                 }
-
                 sh 'echo BASE_URL=${BASE_URL}'
             }
         }
@@ -81,14 +79,14 @@ pipeline {
                 script {
                     sh 'python3 -m pip install --user pytest requests'
 
-                    if (env.BRANCH_NAME == 'develop') {
+                    if (env.GIT_BRANCH.contains('develop')) {
 
                         sh '''
                         export BASE_URL=${BASE_URL}
                         python3 -m pytest test/integration/todoApiTest.py -v
                         '''
 
-                    } else if (env.BRANCH_NAME == 'main') {
+                    } else if (env.GIT_BRANCH.contains('main')) {
 
                         sh '''
                         export BASE_URL=${BASE_URL}
@@ -100,33 +98,33 @@ pipeline {
         }
 
         stage('Promote to Main') {
-           when {
-                expression { env.GIT_BRANCH.contains('develop') }
-            }
+    when {
+        expression { env.GIT_BRANCH.contains('develop') }
+    }
+    steps {
+        withCredentials([usernamePassword(
+            credentialsId: 'github-token',
+            usernameVariable: 'GIT_USERNAME',
+            passwordVariable: 'GIT_PASSWORD'
+        )]) {
 
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'github-token',
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_PASSWORD'
-                )]) {
+            sh '''
+            git config user.email "jenkins@local"
+            git config user.name "Jenkins"
 
-                    sh '''
-                    git config user.email "jenkins@local"
-                    git config user.name "Jenkins"
+            git checkout main
+            git pull origin main
+            git merge -X theirs origin/develop
 
-                    git checkout main
-                    git pull origin main
-                    git merge -X theirs origin/develop
-
-                    git merge origin/develop
-
-                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
-                    git push origin main
-                    '''
-                }
-            }
+            git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
+            git push origin main
+            '''
         }
+
+        build job: 'todo-list-aws-cd'
+    }
+}
+
     }
 
     post {
