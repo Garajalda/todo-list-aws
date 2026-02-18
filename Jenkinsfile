@@ -1,85 +1,31 @@
 pipeline {
     agent any
+
     stages {
-        stage('Static Test') {
-            when {
-                branch 'develop'
-            }
+
+        stage('Deploy Production') {
             steps {
-                sh 'python3 -m pip install --user flake8 bandit'
-                sh 'python3 -m flake8 src/ --output-file=flake8-report.txt || true'
-                sh 'python3 -m bandit -r src/ -f txt -o bandit-report.txt || true'
-            }
-        }
-        stage('Deploy') {
-            steps {
-                script {
-                    if (env.BRANCH_NAME == 'develop') {
-                        sh '''
-                        sam build
-                        sam deploy \
-                        --stack-name todo-list-aws-staging \
-                        --region us-east-1 \
-                        --capabilities CAPABILITY_IAM \
-                        --parameter-overrides Stage=staging \
-                        --resolve-s3
-                        '''
-                    } else if (env.BRANCH_NAME == 'main') {
-                        sh '''
-                        sam build
-                        sam deploy \
-                        --stack-name todo-list-aws-production \
-                        --region us-east-1 \
-                        --capabilities CAPABILITY_IAM \
-                        --parameter-overrides Stage=production \
-                        --resolve-s3
-                        '''
-                    }
-                }
+                sh '''
+                rm -f samconfig.toml
+                sam build
+                sam deploy \
+                --stack-name todo-list-aws-production \
+                --region us-east-1 \
+                --capabilities CAPABILITY_IAM \
+                --parameter-overrides Stage=production \
+                --resolve-s3 \
+                --no-fail-on-empty-changeset
+                '''
             }
         }
 
-        stage('REST Test') {
+        stage('Read Only Test Production') {
             steps {
-                script {
-                    if (env.BRANCH_NAME == 'develop') {
-                        sh '''
-                        python3 -m pip install --user pytest requests
-                        export BASE_URL=https://TU_API_STAGING
-                        python3 -m pytest test/integration/todoApiTest.py -v
-                        '''
-                    } else if (env.BRANCH_NAME == 'main') {
-                        sh '''
-                        python3 -m pip install --user pytest requests
-                        export BASE_URL=https://TU_API_PROD
-                        python3 -m pytest test/integration/testReadOnly.py -v
-                        '''
-                    }
-                }
-            }
-        }
-
-        stage('Promote') {
-            when {
-                branch 'develop'
-            }
-            steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'github-token',
-                    usernameVariable: 'GIT_USERNAME',
-                    passwordVariable: 'GIT_PASSWORD'
-                )]) {
-                    sh '''
-                    git config user.email "jenkins@local"
-                    git config user.name "Jenkins"
-
-                    git checkout main
-                    git merge develop
-
-                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
-                    git push origin main
-                    '''
-                }
+                sh '''
+                python3 -m pip install --user pytest requests
+                export BASE_URL=https://abc123.execute-api.us-east-1.amazonaws.com/production
+                python3 -m pytest test/integration/testReadOnly.py -v
+                '''
             }
         }
     }
