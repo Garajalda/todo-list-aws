@@ -1,0 +1,29 @@
+import os
+import unittest
+import requests
+
+BASE_URL = os.environ.get("BASE_URL")
+
+
+class TestReadOnly(unittest.TestCase):
+
+    def setUp(self):
+        self.assertIsNotNone(BASE_URL, "BASE_URL no configurada")
+
+    def test_list_todos(self):
+        response = requests.get(BASE_URL + "/todos")
+        self.assertEqual(response.status_code, 200)
+
+        todos = response.json()
+        self.assertIsInstance(todos, list)
+
+    def test_get_existing_if_available(self):
+        response = requests.get(BASE_URL + "/todos")
+        self.assertEqual(response.status_code, 200)
+
+        todos = response.json()
+
+        if len(todos) > 0:
+            todo_id = todos[0]["id"]
+            response = requests.get(BASE_URL + f"/todos/{todo_id}")
+            self.assertEqual(response.status_code, 200)
