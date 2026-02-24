@@ -1,0 +1,193 @@
+pipeline {
+    agent none
+
+    environment {
+        AWS_REGION = 'us-east-1'
+    }
+
+    stages {
+
+        // =========================
+        // GET CODE
+        // =========================
+        stage('Get Code') {
+            agent any
+            steps {
+                echo "=== GET CODE ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                checkout scm
+                stash name: 'source-code', includes: '**/*'
+            }
+        }
+
+        // =========================
+        // STATIC TEST (CI only)
+        // =========================
+        stage('Static Test (CI only)') {
+            agent { label 'agent-static' }
+
+            when {
+                expression { env.GIT_BRANCH.contains('develop') }
+            }
+
+            steps {
+                echo "=== STATIC TEST ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                unstash 'source-code'
+
+                sh '''
+                python3 -m pip install --user flake8 bandit
+                python3 -m flake8 src/ --output-file=flake8-report.txt || true
+                python3 -m bandit -r src/ -f txt -o bandit-report.txt || true
+                '''
+
+                archiveArtifacts artifacts: '*.txt'
+            }
+        }
+
+        // =========================
+        // DEPLOY
+        // =========================
+        stage('Deploy') {
+            agent any
+            steps {
+                echo "=== DEPLOY ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                unstash 'source-code'
+
+                script {
+
+                    if (env.GIT_BRANCH.contains('develop')) {
+                        env.STACK_NAME = 'todo-list-aws-staging'
+                        env.STAGE_PARAM = 'staging'
+                    } else {
+                        env.STACK_NAME = 'todo-list-aws-production'
+                        env.STAGE_PARAM = 'production'
+                    }
+                }
+
+                sh """
+                sam build
+
+                sam deploy \
+                  --stack-name ${env.STACK_NAME} \
+                  --region ${AWS_REGION} \
+                  --capabilities CAPABILITY_IAM \
+                  --parameter-overrides Stage=${env.STAGE_PARAM} \
+                  --resolve-s3 \
+                  --no-fail-on-empty-changeset
+                """
+            }
+        }
+
+        // =========================
+        // GET API URL
+        // =========================
+        stage('Get API URL') {
+            agent any
+            steps {
+                echo "=== GET API URL ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                script {
+                    env.BASE_URL = sh(
+                        script: """
+                        aws cloudformation describe-stacks \
+                          --stack-name ${env.STACK_NAME} \
+                          --region ${AWS_REGION} \
+                          --query "Stacks[0].Outputs[?OutputKey=='BaseUrlApi'].OutputValue" \
+                          --output text
+                        """,
+                        returnStdout: true
+                    ).trim()
+                }
+
+                echo "BASE_URL=${env.BASE_URL}"
+            }
+        }
+
+        // =========================
+        // REST TEST
+        // =========================
+        stage('REST Test') {
+            agent { label 'agent-rest' }
+
+            steps {
+                echo "=== REST TEST ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                unstash 'source-code'
+
+                sh 'python3 -m pip install --user pytest requests'
+
+                script {
+                    if (env.GIT_BRANCH.contains('develop')) {
+
+                        sh """
+                        export BASE_URL=${env.BASE_URL}
+                        python3 -m pytest test/integration/todoApiTest.py -v
+                        """
+
+                    } else {
+
+                        sh """
+                        export BASE_URL=${env.BASE_URL}
+                        python3 -m pytest test/integration/testReadOnly.py -v
+                        """
+                    }
+                }
+            }
+        }
+
+        // =========================
+        // PROMOTE
+        // =========================
+        stage('Promote to Main') {
+
+            agent any
+
+            when {
+                expression { env.GIT_BRANCH.contains('develop') }
+            }
+
+            steps {
+                echo "=== PROMOTE ==="
+                sh 'whoami'
+                sh 'hostname'
+
+                withCredentials([usernamePassword(
+                    credentialsId: 'github-token',
+                    usernameVariable: 'GIT_USERNAME',
+                    passwordVariable: 'GIT_PASSWORD'
+                )]) {
+
+                    sh '''
+                    git config user.email "jenkins@local"
+                    git config user.name "Jenkins"
+
+                    git checkout main
+                    git pull origin main
+                    git merge -X theirs origin/develop
+
+                    git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws.git
+                    git push origin main
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        always {
+            cleanWs()
+        }
+    }
+}
