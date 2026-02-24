@@ -80,6 +80,7 @@ pipeline {
                   --region ${AWS_REGION} \
                   --capabilities CAPABILITY_IAM \
                   --parameter-overrides Stage=${env.STAGE_PARAM} \
+                  --resolve-s3 \
                   --no-fail-on-empty-changeset
                 """
             }
