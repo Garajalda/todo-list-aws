@@ -73,7 +73,7 @@ pipeline {
                         rm -f samconfig.toml
                         rm -rf config-repo
 
-                        if [[ "${env.GIT_BRANCH}" == *"develop"* ]]; then
+                        if echo "${GIT_BRANCH}" | grep -q develop; then
                             git clone -b staging https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws-config.git config-repo
                         else
                             git clone -b production https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws-config.git config-repo
