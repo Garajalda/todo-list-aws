@@ -33,24 +33,29 @@ pipeline {
 
                     sh 'echo GIT_BRANCH=$GIT_BRANCH'
 
-                    if (env.GIT_BRANCH.contains('develop')) {
-                        env.STACK_NAME = 'todo-list-aws-staging'
-                        env.STAGE_PARAM = 'staging'
-                    } else if (env.GIT_BRANCH.contains('main')) {
-                        env.STACK_NAME = 'todo-list-aws-production'
-                        env.STAGE_PARAM = 'production'
+                    withCredentials([usernamePassword(
+                        credentialsId: 'github-token',
+                        usernameVariable: 'GIT_USERNAME',
+                        passwordVariable: 'GIT_PASSWORD'
+                    )]) {
+
+                        sh """
+                        rm -f samconfig.toml
+                        rm -rf config-repo
+
+                        if [[ "${env.GIT_BRANCH}" == *"develop"* ]]; then
+                            git clone -b staging https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws-config.git config-repo
+                        else
+                            git clone -b production https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/Garajalda/todo-list-aws-config.git config-repo
+                        fi
+
+                        cp config-repo/samconfig.toml .
+                        """
                     }
 
                     sh """
-                    rm -f samconfig.toml
                     sam build
-                    sam deploy \
-                      --stack-name ${env.STACK_NAME} \
-                      --region ${AWS_REGION} \
-                      --capabilities CAPABILITY_IAM \
-                      --parameter-overrides Stage=${env.STAGE_PARAM} \
-                      --resolve-s3 \
-                      --no-fail-on-empty-changeset
+                    sam deploy --resolve-s3 --no-fail-on-empty-changeset
                     """
                 }
             }
@@ -59,17 +64,25 @@ pipeline {
         stage('Get API URL') {
             steps {
                 script {
+
+                    if (env.GIT_BRANCH.contains('develop')) {
+                        env.STACK_NAME = 'todo-list-aws-staging'
+                    } else {
+                        env.STACK_NAME = 'todo-list-aws-production'
+                    }
+
                     env.BASE_URL = sh(
                         script: """
                         aws cloudformation describe-stacks \
-                          --stack-name ${env.STACK_NAME} \
-                          --region ${AWS_REGION} \
-                          --query "Stacks[0].Outputs[?OutputKey=='BaseUrlApi'].OutputValue" \
-                          --output text
+                        --stack-name ${env.STACK_NAME} \
+                        --region ${AWS_REGION} \
+                        --query "Stacks[0].Outputs[?OutputKey=='BaseUrlApi'].OutputValue" \
+                        --output text
                         """,
                         returnStdout: true
                     ).trim()
                 }
+
                 sh 'echo BASE_URL=${BASE_URL}'
             }
         }
